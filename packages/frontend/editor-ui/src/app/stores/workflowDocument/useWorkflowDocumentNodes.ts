@@ -574,7 +574,7 @@ export function useWorkflowDocumentNodes(deps: WorkflowDocumentNodesDeps) {
 		invalid: INodeCredentialsDetails;
 		type: string;
 	}) {
-		nodes.value.forEach((node: INodeUi) => {
+		nodes.value.forEach((node: INodeUi, nodeIndex) => {
 			const nodeCredentials: INodeCredentials | undefined = (node as unknown as INode).credentials;
 			if (!nodeCredentials?.[data.type]) {
 				return;
@@ -582,23 +582,24 @@ export function useWorkflowDocumentNodes(deps: WorkflowDocumentNodesDeps) {
 
 			const nodeCredentialDetails: INodeCredentialsDetails | string = nodeCredentials[data.type];
 
-			if (
-				typeof nodeCredentialDetails === 'string' &&
-				nodeCredentialDetails === data.invalid.name
-			) {
-				(node.credentials as INodeCredentials)[data.type] = data.credentials;
+			const isInvalid =
+				typeof nodeCredentialDetails === 'string'
+					? nodeCredentialDetails === data.invalid.name
+					: nodeCredentialDetails.id === null
+						? nodeCredentialDetails.name === data.invalid.name
+						: nodeCredentialDetails.id === data.invalid.id;
+
+			if (!isInvalid) {
 				return;
 			}
 
-			if (nodeCredentialDetails.id === null) {
-				if (nodeCredentialDetails.name === data.invalid.name) {
-					(node.credentials as INodeCredentials)[data.type] = data.credentials;
-				}
-				return;
-			}
-
-			if (nodeCredentialDetails.id === data.invalid.id) {
-				(node.credentials as INodeCredentials)[data.type] = data.credentials;
+			// Go through updateNodeAtIndex so the change is tracked and the workflow
+			// is marked dirty (and thus saved), instead of mutating the node in place.
+			const changed = updateNodeAtIndex(nodeIndex, {
+				credentials: { ...nodeCredentials, [data.type]: data.credentials },
+			});
+			if (changed) {
+				void onStateDirty.trigger();
 			}
 		});
 	}
